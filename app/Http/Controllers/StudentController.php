@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Student;
 use Illuminate\Auth\Events\Validated;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 
 class StudentController extends Controller
 {
@@ -32,22 +33,93 @@ class StudentController extends Controller
 
         if ($validator) {
 
-            $extension = $request->image->extension();
-            $newFileName = time() . '.' . $extension;
-            $request->image->move(public_path() . '/uploads/students/', $newFileName);
+            // option 1
+            // $student = new Student();
+            // $student->name = $request->name;
+            // $student->email = $request->email;
+            // $student->address = $request->address;
+            // $student->image = $newFileName;
+            // $student->save();
 
-            $student = new Student();
-            $student->name = $request->name;
-            $student->email = $request->email;
-            $student->address = $request->address;
-            $student->image = $newFileName;
-            $student->save();
+            // // optimized option 1
+            // $student = new Student();
+            // $student->fill($request->post())->save();
 
-            $request->session()->flash('success', 'Student added successfully.');
+            //optimized option 2 but it don't work with image
+            $student = Student::create($request->post())->save();
 
-            return redirect()->route('student.index');
+            //image upload
+            if($request->image){
+
+                $extension = $request->image->getClientOriginalExtension();
+                $newFileName = time() . '.' . $extension;
+                $request->image->move(public_path() . '/uploads/students/', $newFileName);
+
+                $student->image = $newFileName;
+                $student->save();
+            }
+
+            return redirect()->route('student.index')->with('success', 'Student added successfully.');
         } else {
             return redirect()->round('student.create')->withErrors($validator)->withInput();
         }
+    }
+
+    //get edit page
+    public function edit(Student $student){
+
+        // $student = Student::findOrFail($id);
+
+        return view('student.edit', ['student'=> $student]);
+    }
+
+    //put updated student
+    public function update(Student $student, Request $request){
+
+        $validator = $request->validate([
+            'name' => 'required',
+            'email' => 'required',
+            'image' => 'sometimes|mimes:jpeg,png,jpg'
+        ]);
+
+        if ($validator) {
+
+            // $student = Student::find($id);
+            // $student->name = $request->name;
+            // $student->email = $request->email;
+            // $student->address = $request->address;
+            // $student->save();
+
+            //optimized way
+            $student->fill($request->post())->save();
+
+            if($request->image){
+
+                $oldImage = $student->image;
+
+                $extension = $request->image->getClientOriginalExtension();
+                $newFileName = time() . '.' . $extension;
+                $request->image->move(public_path() . '/uploads/students/', $newFileName);
+
+                $student->image = $newFileName;
+                $student->save();
+
+                File::delete(public_path() . '/uploads/students/', $oldImage);
+            }
+
+            return redirect()->route('student.index')->with('success', 'Student updated successfully.');
+        } else {
+            return redirect()->round('student.edit', $student->id)->withErrors($validator)->withInput();
+        }
+    }
+
+    //get student
+    public function destroy(Student $student, Request $request){
+
+        // $student = Student::findOrFail($id);
+        File::delete(public_path() . '/uploads/students/', $student->image);
+        $student->delete();
+
+        return redirect()->route('student.index')->with('success', 'Student Deleted Successfully');
     }
 }
